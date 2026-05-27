@@ -1,0 +1,19 @@
+[decoder]
+slicers = 8          # 1-16 parallel amplitude-imbalance slicers
+fix_bits = "single"  # "none" | "single" | "double"
+
+# One or more ka9q-radio audio sources.
+# Each entry spawns independent AFSK decoder tasks for every SSRC seen on the group.
+[[source]]
+host = "packet.local"  # mDNS hostname or raw multicast address (e.g. "239.0.0.1")
+port = 5004            # RTP UDP port (ka9q-radio default: 5004)
+interface = ""         # Bind interface IP; empty = OS default
+jitter_buffer = 2      # Reorder window in RTP packets (~80ms at 24kHz); 2 suits LAN
+ssrc = []              # SSRC allowlist; empty = accept all SSRCs on this group
+freq_mhz = 144.390     # Tuned frequency in MHz (shown in output; optional)
+
+# Additional sources can be added as more [[source]] sections:
+# [[source]]
+# host = "packet2.local"
+# port = 5004
+# freq_mhz = 144.390
