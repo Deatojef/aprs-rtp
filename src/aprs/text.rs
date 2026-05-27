@@ -12,14 +12,12 @@ pub fn to_tnc2(frame: &Ax25Frame) -> String {
     s.push('>');
     s.push_str(&frame.destination);
 
-    for (call, &_heard) in frame.via.iter().zip(frame.via_heard.iter()) {
+    for (call, &heard) in frame.via.iter().zip(frame.via_heard.iter()) {
         s.push(',');
         s.push_str(call);
-        /* 
         if heard {
             s.push('*');
         }
-        */
     }
 
     s.push(':');
