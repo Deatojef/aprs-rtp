@@ -409,4 +409,4 @@ delivery continues across transient socket/decoder hiccups.
 
 ## License
 
-See [LICENSE](LICENSE).
+Licensed under either of [MIT](LICENSE-MIT) or [Apache-2.0](LICENSE-APACHE) at your option.

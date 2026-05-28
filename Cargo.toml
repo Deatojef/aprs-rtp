@@ -2,6 +2,13 @@
 name = "aprs-rtp"
 version = "0.1.0"
 edition = "2024"
+rust-version = "1.85"
+description = "Decode 1200-baud APRS packets from ka9q-radio RTP multicast audio streams"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/Deatojef/aprs-rtp"
+readme = "README.md"
+keywords = ["aprs", "rtp", "ham-radio", "ax25", "sdr"]
+categories = ["network-programming", "multimedia::audio", "asynchronous"]
 
 [dependencies]
 bytes = "1.11.1"
