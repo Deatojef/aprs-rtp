@@ -1,10 +1,9 @@
-/// PCM encoding formats carried in ka9q-radio RTP streams.
+/// PCM encoding format carried in ka9q-radio RTP streams.
+///
+/// All payload types in ka9q-radio's PCM table use S16Be (big-endian signed 16-bit).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Encoding {
     S16Be,
-    S16Le,
-    F32Be,
-    F32Le,
 }
 
 /// Describes an RTP payload type's audio format.
@@ -44,45 +43,13 @@ pub fn pt_info(pt: u8) -> Option<PtInfo> {
 /// For stereo encodings only the left channel (even samples) is returned,
 /// since APRS is always mono.
 pub fn decode_samples(payload: &[u8], info: &PtInfo) -> Vec<f32> {
-    match info.encoding {
-        Encoding::S16Be => decode_s16be(payload, info.channels),
-        Encoding::S16Le => decode_s16le(payload, info.channels),
-        Encoding::F32Be => decode_f32be(payload, info.channels),
-        Encoding::F32Le => decode_f32le(payload, info.channels),
-    }
-}
-
-fn decode_s16be(payload: &[u8], channels: u8) -> Vec<f32> {
+    let Encoding::S16Be = info.encoding;
     payload
-        .chunks_exact(2 * channels as usize)
+        .chunks_exact(2 * info.channels as usize)
         .map(|chunk| {
             let s = i16::from_be_bytes([chunk[0], chunk[1]]);
             s as f32 / 32768.0
         })
-        .collect()
-}
-
-fn decode_s16le(payload: &[u8], channels: u8) -> Vec<f32> {
-    payload
-        .chunks_exact(2 * channels as usize)
-        .map(|chunk| {
-            let s = i16::from_le_bytes([chunk[0], chunk[1]]);
-            s as f32 / 32768.0
-        })
-        .collect()
-}
-
-fn decode_f32be(payload: &[u8], channels: u8) -> Vec<f32> {
-    payload
-        .chunks_exact(4 * channels as usize)
-        .map(|chunk| f32::from_be_bytes([chunk[0], chunk[1], chunk[2], chunk[3]]))
-        .collect()
-}
-
-fn decode_f32le(payload: &[u8], channels: u8) -> Vec<f32> {
-    payload
-        .chunks_exact(4 * channels as usize)
-        .map(|chunk| f32::from_le_bytes([chunk[0], chunk[1], chunk[2], chunk[3]]))
         .collect()
 }
 

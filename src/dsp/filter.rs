@@ -1,82 +1,23 @@
 use std::f32::consts::PI;
 
-/// Window function applied to FIR kernels to shape their frequency response.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Window {
-    /// Rectangular — no tapering. Fastest roll-off but highest sidelobes.
-    Truncated,
-    /// Cosine window (not the same as Hann). Used for narrowband pre-filters.
-    Cosine,
-    /// Hamming window. Good general-purpose choice.
-    Hamming,
-    /// Blackman window. Excellent sidelobe suppression at the cost of wider transition band.
-    Blackman,
-}
-
-/// Compute one sample of a window function.
-///
-/// `j` is in [0, size-1]; center is at (size-1)/2.
-fn window(wtype: Window, size: usize, j: usize) -> f32 {
-    let center = 0.5 * (size as f32 - 1.0);
-    let j = j as f32;
-    match wtype {
-        Window::Truncated => 1.0,
-        Window::Cosine => ((j - center) / size as f32 * PI).cos(),
-        Window::Hamming => 0.53836 - 0.46164 * ((j * 2.0 * PI) / (size as f32 - 1.0)).cos(),
-        Window::Blackman => {
-            0.42659
-                - 0.49656 * ((j * 2.0 * PI) / (size as f32 - 1.0)).cos()
-                + 0.076849 * ((j * 4.0 * PI) / (size as f32 - 1.0)).cos()
-        }
-    }
-}
-
-/// Generate a lowpass FIR kernel normalized for unity gain at DC.
-///
-/// - `fc`: cutoff frequency as a fraction of the sample rate (0 < fc < 0.5)
-/// - `size`: number of taps (should be odd)
-///
-/// Returns the kernel coefficients, length `size`.
-pub fn gen_lowpass(fc: f32, size: usize, wtype: Window) -> Vec<f32> {
-    assert!(size >= 3, "filter size must be >= 3");
-    let center = 0.5 * (size as f32 - 1.0);
-    let mut out: Vec<f32> = (0..size)
-        .map(|j| {
-            let j = j as f32;
-            let sinc = if (j - center).abs() < 1e-6 {
-                2.0 * fc
-            } else {
-                (2.0 * PI * fc * (j - center)).sin() / (PI * (j - center))
-            };
-            sinc * window(wtype, size, j as usize)
-        })
-        .collect();
-
-    // Normalize for unity gain at DC.
-    let g: f32 = out.iter().sum();
-    out.iter_mut().for_each(|v| *v /= g);
-    out
-}
-
 /// Generate a bandpass FIR kernel, normalized for unity gain at the center of the passband.
 ///
-/// Used as the optional pre-filter that attenuates frequencies outside the mark/space band.
+/// Used as the pre-filter that attenuates frequencies outside the mark/space band.
 ///
 /// - `f1`, `f2`: lower and upper cutoff frequencies as fractions of the sample rate
-/// - `size`: number of taps
-pub fn gen_bandpass(f1: f32, f2: f32, size: usize, wtype: Window) -> Vec<f32> {
+/// - `size`: number of taps (should be odd)
+pub fn gen_bandpass(f1: f32, f2: f32, size: usize) -> Vec<f32> {
     assert!(size >= 3, "filter size must be >= 3");
     let center = 0.5 * (size as f32 - 1.0);
     let mut out: Vec<f32> = (0..size)
         .map(|j| {
             let j = j as f32;
-            let sinc = if (j - center).abs() < 1e-6 {
+            if (j - center).abs() < 1e-6 {
                 2.0 * (f2 - f1)
             } else {
                 (2.0 * PI * f2 * (j - center)).sin() / (PI * (j - center))
                     - (2.0 * PI * f1 * (j - center)).sin() / (PI * (j - center))
-            };
-            sinc * window(wtype, size, j as usize)
+            }
         })
         .collect();
 
@@ -153,15 +94,6 @@ mod tests {
     use super::*;
 
     #[test]
-    fn lowpass_dc_unity_gain() {
-        // At DC, summing all taps should give 1.0 (unity gain).
-        let kernel = gen_lowpass(0.25, 31, Window::Hamming);
-        assert_eq!(kernel.len(), 31);
-        let dc_gain: f32 = kernel.iter().sum();
-        assert!((dc_gain - 1.0).abs() < 1e-5, "DC gain = {dc_gain}");
-    }
-
-    #[test]
     fn rrc_lowpass_unity_gain() {
         // 24000 Hz / 1200 baud = 20 samples per symbol; 2.80 sym width → 56 taps → 57 (odd)
         let sps: f32 = 24000.0 / 1200.0;
@@ -178,7 +110,7 @@ mod tests {
         let sps = 24000.0f32;
         let f1 = (1200.0 - 0.155 * baud) / sps;
         let f2 = (2200.0 + 0.155 * baud) / sps;
-        let kernel = gen_bandpass(f1, f2, 63, Window::Truncated);
+        let kernel = gen_bandpass(f1, f2, 63);
         // Gain at center: G(fc) = Σ h[n]·cos(2π·fc·(n−center)).
         // For a cosine input at fc, the output amplitude = G(fc); should be ~1.0.
         let fc = (f1 + f2) / 2.0;

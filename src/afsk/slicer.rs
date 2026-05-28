@@ -51,25 +51,13 @@ impl SlicerBank {
     /// Drive all slicers for one audio sample.
     ///
     /// `m_amp`, `s_amp`: mark and space envelope magnitudes from IQ detection.
-    /// `m_peak`, `m_valley`, `s_peak`, `s_valley`: running AGC bounds used for
-    /// the per-slicer amplitude (quality) estimate.
     ///
     /// Returns bits from any slicers whose DPLLs overflowed this sample.
-    pub fn process(
-        &mut self,
-        m_amp: f32,
-        s_amp: f32,
-        m_peak: f32,
-        m_valley: f32,
-        s_peak: f32,
-        s_valley: f32,
-    ) -> Vec<DemodBit> {
+    pub fn process(&mut self, m_amp: f32, s_amp: f32) -> Vec<DemodBit> {
         let mut bits = Vec::new();
         for (dpll, &gain) in self.dplls.iter_mut().zip(&self.gains) {
             let demod_out = m_amp - s_amp * gain;
-            let amp = 0.5 * (m_peak - m_valley + (s_peak - s_valley) * gain);
-            let amp = if amp < 1e-7 { 1.0 } else { amp };
-            if let Some(bit) = dpll.step(demod_out, amp) {
+            if let Some(bit) = dpll.step(demod_out) {
                 bits.push(bit);
             }
         }
@@ -115,7 +103,7 @@ mod tests {
         let mut total_bits = 0usize;
         for _ in 0..20 {
             // m_amp >> s_amp → strong mark
-            let bits = bank.process(1.0, 0.0, 1.0, 0.0, 0.0, 0.0);
+            let bits = bank.process(1.0, 0.0);
             total_bits += bits.len();
         }
         // Each of 8 slicers overflows once in 20 samples.

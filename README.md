@@ -30,7 +30,7 @@ channel.
 
 ## How it fits in a ka9q-radio setup
 
-```
+```text
     SDR ──► radiod ──► RTP multicast (e.g. 239.x or hostname.local:5004)
                               │
                               ▼
@@ -51,7 +51,7 @@ which is how `AprsPacket.freq_mhz` is derived.
 
 ### Minimal example
 
-```rust
+```rust,no_run
 use aprs_rtp::{
     config::{DecoderConfig, SourceConfig},
     AprsListener,
@@ -92,7 +92,7 @@ The receiver stays open as long as the multicast socket is alive.
 deserialize them from any format you like. For TOML, define a top-level
 wrapper in your own code and use the `toml` crate directly:
 
-```rust
+```rust,no_run
 use aprs_rtp::{config::{DecoderConfig, SourceConfig}, AprsListener, AprsPacket};
 use serde::Deserialize;
 use tokio::sync::mpsc;
@@ -137,7 +137,7 @@ If a single ka9q-radio multicast group carries multiple demodulator
 channels and you only care about one (or a few), set the `ssrc` allowlist
 on the source:
 
-```rust
+```rust,ignore
 SourceConfig {
     host: "packet.local".into(),
     port: 5004,
@@ -188,7 +188,7 @@ routing position reports to one queue and messages to another.
 
 Show only directly-heard packets:
 
-```rust
+```rust,ignore
 while let Some(pkt) = rx.recv().await {
     if pkt.heard_direct {
         println!("direct: {}", pkt.text);
@@ -198,7 +198,7 @@ while let Some(pkt) = rx.recv().await {
 
 Route by APRS data type:
 
-```rust
+```rust,ignore
 while let Some(pkt) = rx.recv().await {
     match pkt.dti {
         Some(b'!') | Some(b'=') | Some(b'/') | Some(b'@') => handle_position(&pkt),
@@ -215,7 +215,7 @@ frame within an audio block — `slicer_hits` counts them, and frames
 across blocks within 3 s are already suppressed internally, but
 cross-receiver dedup is your responsibility):
 
-```rust
+```rust,ignore
 use std::collections::HashMap;
 use std::time::{Duration, Instant};
 
@@ -384,7 +384,7 @@ slicer agreement, frequency, direct-vs-digipeated marker, the
 
 ## Architecture overview
 
-```
+```text
 RTP listener (async tokio task)
     │  parses UDP packets, dejitters per SSRC
     ▼

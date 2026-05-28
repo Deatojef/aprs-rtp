@@ -129,10 +129,7 @@ mod tests {
     }
 
     fn make_header(seq: u16, ssrc: u32) -> RtpHeader {
-        RtpHeader {
-            version: 2, padding: false, extension: false, marker: false,
-            payload_type: 116, seq, timestamp: seq as u32 * 480, ssrc,
-        }
+        RtpHeader { payload_type: 116, seq, ssrc }
     }
 
     fn make_payload(n_samples: usize) -> Vec<u8> {

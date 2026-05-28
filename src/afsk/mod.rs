@@ -3,9 +3,9 @@ pub mod dpll;
 pub mod oscillator;
 pub mod slicer;
 
-use crate::config::{DecoderConfig, FixBits};
+use crate::config::DecoderConfig;
 use crate::dsp::{
-    filter::{Window, calc_taps, gen_bandpass, gen_rrc_lowpass},
+    filter::{calc_taps, gen_bandpass, gen_rrc_lowpass},
     fir::DelayLine,
 };
 use crate::AudioLevel;
@@ -74,9 +74,6 @@ pub struct AfskDemodulator {
 
     // Multi-slicer DPLL bank.
     slicers: SlicerBank,
-
-    // Which CRC fix mode to apply (passed through to HDLC layer, Phase 4).
-    pub fix_bits: FixBits,
 }
 
 impl AfskDemodulator {
@@ -91,7 +88,7 @@ impl AfskDemodulator {
         let pre_taps = calc_taps(PRE_FILTER_LEN_SYM, sample_rate, baud, MAX_FILTER_SIZE);
         let f1 = (mark_hz.min(space_hz) - PRE_FILTER_BAUD * baud as f32) / sr;
         let f2 = (mark_hz.max(space_hz) + PRE_FILTER_BAUD * baud as f32) / sr;
-        let pre_filter = gen_bandpass(f1, f2, pre_taps, Window::Truncated);
+        let pre_filter = gen_bandpass(f1, f2, pre_taps);
 
         // RRC lowpass: shared for all four IQ delay lines.
         let sps = sr / baud as f32;
@@ -115,7 +112,6 @@ impl AfskDemodulator {
             alevel_mark_peak: 0.0,
             alevel_space_peak: 0.0,
             slicers: SlicerBank::new(cfg.slicers, baud, sample_rate),
-            fix_bits: cfg.fix_bits,
         }
     }
 
@@ -190,19 +186,7 @@ impl AfskDemodulator {
         }
 
         // 6. Multi-slicer DPLL: emit bits.
-        self.slicers.process(
-            m_amp,
-            s_amp,
-            self.m_agc.peak,
-            self.m_agc.valley,
-            self.s_agc.peak,
-            self.s_agc.valley,
-        )
-    }
-
-    /// Return the number of slicers configured.
-    pub fn num_slicers(&self) -> usize {
-        self.slicers.dplls.len()
+        self.slicers.process(m_amp, s_amp)
     }
 
     /// Audio levels at the current moment, on direwolf's familiar 0–~200 scale.
@@ -211,7 +195,7 @@ impl AfskDemodulator {
     /// To report values on the same numeric scale direwolf users expect, the
     /// constants here are doubled relative to direwolf's `* 50` / `* 100`.
     ///
-    /// - `rec`   = `(raw_peak − raw_valley) × 100`  (~100 = full-scale audio)
+    /// - `rec`   = `(raw_peak − raw_valley) × 100`  (~200 = full-scale audio)
     /// - `mark`  = `mark_iq_peak × 200`             (~100 for full-scale tone)
     /// - `space` = `space_iq_peak × 200`
     ///

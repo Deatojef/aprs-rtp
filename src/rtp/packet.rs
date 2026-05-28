@@ -1,13 +1,8 @@
-/// Parsed RTP header (internal representation, not wire format).
+/// Parsed RTP header fields used by the pipeline.
 #[derive(Debug, Clone)]
 pub struct RtpHeader {
-    pub version: u8,
-    pub padding: bool,
-    pub extension: bool,
-    pub marker: bool,
     pub payload_type: u8,
     pub seq: u16,
-    pub timestamp: u32,
     pub ssrc: u32,
 }
 
@@ -26,20 +21,17 @@ pub fn parse(buf: &[u8]) -> crate::Result<(RtpHeader, usize)> {
     if version != 2 {
         return Err(crate::Error::RtpVersion(version));
     }
-    let padding = ((word0 >> 29) & 1) != 0;
-    let extension = ((word0 >> 28) & 1) != 0;
+    let has_extension = ((word0 >> 28) & 1) != 0;
     let cc = ((word0 >> 24) & 0xf) as usize;
-    let marker = ((word0 >> 23) & 1) != 0;
     let payload_type = ((word0 >> 16) & 0x7f) as u8;
     let seq = (word0 & 0xffff) as u16;
 
-    let timestamp = u32::from_be_bytes([buf[4], buf[5], buf[6], buf[7]]);
     let ssrc = u32::from_be_bytes([buf[8], buf[9], buf[10], buf[11]]);
 
     // Fixed header (12) + CSRC list (cc * 4)
     let mut offset = 12 + cc * 4;
 
-    if extension {
+    if has_extension {
         // Extension header: first 2 bytes are profile, next 2 bytes are length in 32-bit words
         if buf.len() < offset + 4 {
             return Err(crate::Error::PacketTooShort(buf.len()));
@@ -52,10 +44,7 @@ pub fn parse(buf: &[u8]) -> crate::Result<(RtpHeader, usize)> {
         return Err(crate::Error::PacketTooShort(buf.len()));
     }
 
-    Ok((
-        RtpHeader { version, padding, extension, marker, payload_type, seq, timestamp, ssrc },
-        offset,
-    ))
+    Ok((RtpHeader { payload_type, seq, ssrc }, offset))
 }
 
 #[cfg(test)]
@@ -72,7 +61,6 @@ mod tests {
         buf[4..8].copy_from_slice(&0u32.to_be_bytes()); // timestamp=0
         buf[8..12].copy_from_slice(&0xDEAD_u32.to_be_bytes()); // ssrc
         let (hdr, offset) = parse(&buf).unwrap();
-        assert_eq!(hdr.version, 2);
         assert_eq!(hdr.payload_type, 116);
         assert_eq!(hdr.seq, 1);
         assert_eq!(hdr.ssrc, 0xDEAD);

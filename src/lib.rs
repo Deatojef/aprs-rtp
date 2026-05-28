@@ -1,12 +1,14 @@
-pub mod afsk;
-pub mod aprs;
-pub mod ax25;
+#![doc = include_str!("../README.md")]
+
+pub(crate) mod afsk;
+pub(crate) mod aprs;
+pub(crate) mod ax25;
 pub mod config;
-pub mod dsp;
+pub(crate) mod dsp;
 pub mod error;
-pub mod hdlc;
-pub mod pipeline;
-pub mod rtp;
+pub(crate) mod hdlc;
+pub(crate) mod pipeline;
+pub(crate) mod rtp;
 
 pub use error::{Error, Result};
 

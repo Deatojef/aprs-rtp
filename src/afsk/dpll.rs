@@ -3,8 +3,6 @@
 pub struct DemodBit {
     /// The bit value: true = mark, false = space.
     pub bit: bool,
-    /// Confidence 0–100: |demod_out| * 100 / amplitude.
-    pub quality: u8,
     /// Slicer index that produced this bit (0..num_slicers).
     pub slice: usize,
 }
@@ -75,12 +73,11 @@ impl Dpll {
     /// Advance the DPLL by one audio sample.
     ///
     /// `demod_out`: raw demodulated value (positive = mark, negative = space).
-    /// `amplitude`: expected peak-to-peak envelope for quality scaling.
     ///
     /// Returns `Some(DemodBit)` when the accumulator overflows (bit sampling event),
     /// or `None` most of the time.
     #[inline]
-    pub fn step(&mut self, demod_out: f32, amplitude: f32) -> Option<DemodBit> {
+    pub fn step(&mut self, demod_out: f32) -> Option<DemodBit> {
         self.prev_d_c_pll = self.data_clock_pll;
 
         // Unsigned add to avoid signed-integer overflow UB (mirrors direwolf's cast).
@@ -88,11 +85,8 @@ impl Dpll {
             (self.data_clock_pll as u32).wrapping_add(self.step) as i32;
 
         let bit_sampled = if self.data_clock_pll < 0 && self.prev_d_c_pll > 0 {
-            // Overflow → sample a bit.
-            let amp = if amplitude < 1e-7 { 1.0 } else { amplitude };
-            let quality = ((demod_out.abs() * 100.0 / amp) as u32).min(100) as u8;
             self.dcd_each_symbol();
-            Some(DemodBit { bit: demod_out > 0.0, quality, slice: self.slice })
+            Some(DemodBit { bit: demod_out > 0.0, slice: self.slice })
         } else {
             None
         };
@@ -157,20 +151,11 @@ mod tests {
         let mut dpll = Dpll::new(1200, 24000, 0);
         let mut bits = 0usize;
         for _ in 0..20 {
-            if dpll.step(1.0, 1.0).is_some() {
+            if dpll.step(1.0).is_some() {
                 bits += 1;
             }
         }
         assert_eq!(bits, 1, "expected exactly 1 bit overflow in 20 samples");
-    }
-
-    #[test]
-    fn quality_clamps_to_100() {
-        // The quality formula is: (|demod_out| * 100 / amp).min(100).
-        // Verify a very large ratio clamps to 100.
-        let raw = (500.0f32 * 100.0 / 1.0) as u32;
-        let quality = raw.min(100) as u8;
-        assert_eq!(quality, 100);
     }
 
     #[test]
@@ -180,7 +165,7 @@ mod tests {
         dpll.data_clock_pll = 0x4000_0000; // large positive, far from sample point
         dpll.prev_demod_data = false;
         // Transition: prev=false, new=true with demod_out > 0
-        dpll.step(1.0, 1.0); // should nudge the pll
+        dpll.step(1.0); // should nudge the pll
         // After a transition, pll should have been multiplied by searching_inertia (0.50)
         // from where it was after the step increment. Hard to check exactly, but it should
         // be less than the starting value + step.

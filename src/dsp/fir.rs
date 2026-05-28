@@ -48,11 +48,6 @@ impl DelayLine {
         sum
     }
 
-    /// Reset all samples to zero.
-    pub fn reset(&mut self) {
-        self.buf.fill(0.0);
-        self.head = 0;
-    }
 }
 
 #[cfg(test)]

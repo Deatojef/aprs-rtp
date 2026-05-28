@@ -68,12 +68,6 @@ impl Oscillator {
         fsin256(self.phase)
     }
 
-    /// Advance and return (cos, sin) in one call.
-    #[inline(always)]
-    pub fn step(&mut self) -> (f32, f32) {
-        self.advance();
-        (self.cos(), self.sin())
-    }
 }
 
 #[cfg(test)]

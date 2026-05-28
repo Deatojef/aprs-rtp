@@ -12,8 +12,6 @@ const MAX_FRAME_LEN: usize = 512;
 pub struct RawFrame {
     /// Frame bytes including the 2-byte FCS (not stripped here).
     pub data: Vec<u8>,
-    /// Slicer index that produced this frame.
-    pub slice: usize,
 }
 
 /// Per-slicer HDLC framing state machine.
@@ -25,8 +23,6 @@ pub struct RawFrame {
 /// `RawFrame` values; CRC validation is performed by the FEC layer.
 #[derive(Debug, Clone)]
 pub struct HdlcDecoder {
-    /// Which slicer this decoder belongs to (passed through to RawFrame).
-    slice: usize,
     /// Previous raw (pre-NRZI) bit, for NRZI decode.
     prev_raw: bool,
     /// 8-bit pattern detector shift register (MSB = oldest received bit).
@@ -42,9 +38,8 @@ pub struct HdlcDecoder {
 }
 
 impl HdlcDecoder {
-    pub fn new(slice: usize) -> Self {
+    pub fn new(_slice: usize) -> Self {
         Self {
-            slice,
             prev_raw: false,
             pat_det: 0,
             oacc: 0,
@@ -82,10 +77,7 @@ impl HdlcDecoder {
         // 0x7E = 01111110 → flag byte.
         if self.pat_det == 0x7E {
             let result = if self.in_frame && self.frame_buf.len() >= MIN_FRAME_LEN {
-                Some(RawFrame {
-                    data: self.frame_buf.clone(),
-                    slice: self.slice,
-                })
+                Some(RawFrame { data: self.frame_buf.clone() })
             } else {
                 None
             };
@@ -246,7 +238,6 @@ mod tests {
         }
         let f = decoded.expect("should have decoded a frame");
         assert_eq!(f.data, frame_bytes);
-        assert_eq!(f.slice, 0);
     }
 
     #[test]
@@ -289,19 +280,4 @@ mod tests {
         assert!(!got_frame, "abort sequence should prevent frame emission");
     }
 
-    #[test]
-    fn slice_index_preserved() {
-        let content = vec![0u8; 16];
-        let frame_bytes = valid_ax25_frame(&content);
-        let raw_nrzi = build_hdlc_frame(&frame_bytes);
-
-        let mut dec = HdlcDecoder::new(5);
-        for b in raw_nrzi {
-            if let Some(f) = dec.push_bit(b) {
-                assert_eq!(f.slice, 5);
-                return;
-            }
-        }
-        panic!("no frame decoded");
-    }
 }

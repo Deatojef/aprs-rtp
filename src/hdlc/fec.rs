@@ -27,10 +27,6 @@ pub fn crc16(data: &[u8]) -> u16 {
 pub struct ValidFrame {
     /// Frame bytes with the 2-byte FCS removed.
     pub data: Vec<u8>,
-    /// Slicer index that produced this frame.
-    pub slice: usize,
-    /// Number of bits that were flipped to recover this frame (0 = clean decode).
-    pub bit_errors_corrected: u8,
 }
 
 /// Attempt to validate a raw HDLC frame and, if configured, recover from bit errors.
@@ -47,19 +43,14 @@ pub fn try_validate(raw: &RawFrame, fix_bits: FixBits) -> Option<ValidFrame> {
 
     // Check clean decode first.
     if check_crc(data) {
-        return Some(ValidFrame {
-            data: data[..data.len() - 2].to_vec(),
-            slice: raw.slice,
-            bit_errors_corrected: 0,
-        });
+        return Some(ValidFrame { data: data[..data.len() - 2].to_vec() });
     }
 
     match fix_bits {
         FixBits::None => None,
-        FixBits::Single => fix_single_bit(data, raw.slice),
+        FixBits::Single => fix_single_bit(data),
         FixBits::Double => {
-            fix_single_bit(data, raw.slice)
-                .or_else(|| fix_double_adjacent(data, raw.slice))
+            fix_single_bit(data).or_else(|| fix_double_adjacent(data))
         }
     }
 }
@@ -73,18 +64,14 @@ fn check_crc(frame: &[u8]) -> bool {
 }
 
 /// Try flipping each bit in `frame` one at a time; return first valid result.
-fn fix_single_bit(frame: &[u8], slice: usize) -> Option<ValidFrame> {
+fn fix_single_bit(frame: &[u8]) -> Option<ValidFrame> {
     let n = frame.len();
     let mut buf = frame.to_vec();
     for byte_idx in 0..n {
         for bit_idx in 0..8u8 {
             buf[byte_idx] ^= 1 << bit_idx;
             if check_crc(&buf) {
-                return Some(ValidFrame {
-                    data: buf[..n - 2].to_vec(),
-                    slice,
-                    bit_errors_corrected: 1,
-                });
+                return Some(ValidFrame { data: buf[..n - 2].to_vec() });
             }
             buf[byte_idx] ^= 1 << bit_idx; // restore
         }
@@ -96,7 +83,7 @@ fn fix_single_bit(frame: &[u8], slice: usize) -> Option<ValidFrame> {
 ///
 /// "Adjacent" means two bits that are next to each other in the bit stream:
 /// either within the same byte or spanning the boundary between consecutive bytes.
-fn fix_double_adjacent(frame: &[u8], slice: usize) -> Option<ValidFrame> {
+fn fix_double_adjacent(frame: &[u8]) -> Option<ValidFrame> {
     let n = frame.len();
     let total_bits = n * 8;
     let mut buf = frame.to_vec();
@@ -110,11 +97,7 @@ fn fix_double_adjacent(frame: &[u8], slice: usize) -> Option<ValidFrame> {
         buf[b0] ^= 1 << bit0;
         buf[b1] ^= 1 << bit1;
         if check_crc(&buf) {
-            return Some(ValidFrame {
-                data: buf[..n - 2].to_vec(),
-                slice,
-                bit_errors_corrected: 2,
-            });
+            return Some(ValidFrame { data: buf[..n - 2].to_vec() });
         }
         buf[b0] ^= 1 << bit0;
         buf[b1] ^= 1 << bit1;
@@ -128,7 +111,7 @@ mod tests {
     use crate::hdlc::framer::RawFrame;
 
     fn make_raw(data: Vec<u8>) -> RawFrame {
-        RawFrame { data, slice: 0 }
+        RawFrame { data }
     }
 
     fn frame_with_fcs(payload: &[u8]) -> Vec<u8> {
@@ -158,9 +141,7 @@ mod tests {
         let raw = make_raw(frame);
         let result = try_validate(&raw, FixBits::None);
         assert!(result.is_some());
-        let v = result.unwrap();
-        assert_eq!(v.data, payload);
-        assert_eq!(v.bit_errors_corrected, 0);
+        assert_eq!(result.unwrap().data, payload);
     }
 
     #[test]
@@ -172,9 +153,7 @@ mod tests {
         let raw = make_raw(frame);
         let result = try_validate(&raw, FixBits::Single);
         assert!(result.is_some(), "should recover single-bit error");
-        let v = result.unwrap();
-        assert_eq!(v.bit_errors_corrected, 1);
-        assert_eq!(v.data, payload);
+        assert_eq!(result.unwrap().data, payload);
     }
 
     #[test]
@@ -188,9 +167,7 @@ mod tests {
         assert!(try_validate(&raw, FixBits::Single).is_none());
         let result = try_validate(&raw, FixBits::Double);
         assert!(result.is_some(), "should recover double-adjacent error");
-        let v = result.unwrap();
-        assert_eq!(v.bit_errors_corrected, 2);
-        assert_eq!(v.data, payload);
+        assert_eq!(result.unwrap().data, payload);
     }
 
     #[test]
