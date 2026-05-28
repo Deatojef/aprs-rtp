@@ -16,8 +16,6 @@ pub enum Error {
     NotMulticast(std::net::Ipv4Addr),
     #[error("channel closed")]
     ChannelClosed,
-    #[error("configuration error: {0}")]
-    Config(String),
 }
 
 pub type Result<T> = std::result::Result<T, Error>;

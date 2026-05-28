@@ -2,14 +2,6 @@ use serde::Deserialize;
 
 #[derive(Debug, Clone, Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct Config {
-    pub decoder: DecoderConfig,
-    #[serde(rename = "source")]
-    pub sources: Vec<SourceConfig>,
-}
-
-#[derive(Debug, Clone, Deserialize)]
-#[serde(deny_unknown_fields)]
 pub struct SourceConfig {
     /// mDNS hostname (e.g. "packet.local") or raw multicast address (e.g. "239.0.0.1").
     pub host: String,
@@ -74,12 +66,3 @@ fn default_mark_hz() -> u32 { 1200 }
 fn default_space_hz() -> u32 { 2200 }
 fn default_baud() -> u32 { 1200 }
 fn default_slicers() -> usize { 8 }
-
-impl Config {
-    pub fn from_file(path: &str) -> crate::Result<Self> {
-        let text = std::fs::read_to_string(path)
-            .map_err(|e| crate::Error::Config(format!("cannot read {path}: {e}")))?;
-        toml::from_str(&text)
-            .map_err(|e| crate::Error::Config(format!("parse error in {path}: {e}")))
-    }
-}

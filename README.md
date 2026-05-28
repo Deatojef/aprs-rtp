@@ -88,17 +88,27 @@ The receiver stays open as long as the multicast socket is alive.
 
 ### Loading config from a TOML file
 
-For applications that want users to control sources and decoder tuning
-without recompiling, `Config::from_file` reads the same TOML format as
-the bundled example:
+`SourceConfig` and `DecoderConfig` derive `serde::Deserialize`, so you can
+deserialize them from any format you like. For TOML, define a top-level
+wrapper in your own code and use the `toml` crate directly:
 
 ```rust
-use aprs_rtp::{config::Config, AprsListener, AprsPacket};
+use aprs_rtp::{config::{DecoderConfig, SourceConfig}, AprsListener, AprsPacket};
+use serde::Deserialize;
 use tokio::sync::mpsc;
 
+#[derive(Deserialize)]
+struct AppConfig {
+    #[serde(default)]
+    decoder: DecoderConfig,
+    #[serde(rename = "source")]
+    sources: Vec<SourceConfig>,
+}
+
 #[tokio::main]
-async fn main() -> aprs_rtp::Result<()> {
-    let cfg = Config::from_file("config.toml")?;
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let text = std::fs::read_to_string("config.toml")?;
+    let cfg: AppConfig = toml::from_str(&text)?;
 
     // Merge packets from all configured sources into one channel.
     let (tx, mut rx) = mpsc::channel::<AprsPacket>(512);
@@ -358,7 +368,7 @@ completely decoupled from how strong the signal got to your antenna.
 A reference consumer is included at `examples/aprs-listen.rs`:
 
 ```sh
-# uses ./config.toml by default
+# uses ./examples/config.toml by default
 cargo run --release --example aprs-listen
 
 # or point at any other config file
@@ -397,13 +407,13 @@ your code (AprsListener.run() return value)
 - `src/ax25/` — AX.25 UI frame parser
 - `src/aprs/` — TNC2 text formatter
 - `src/pipeline/` — per-SSRC stream-decoder spawning and routing
-- `src/config.rs` — TOML loader and config types
+- `src/config.rs` — config types (`SourceConfig`, `DecoderConfig`, `FixBits`)
 
 ## Error handling
 
 `AprsListener::run` returns `Result<mpsc::Receiver<AprsPacket>>` with
-`aprs_rtp::Error` covering address resolution, multicast join, RTP parse,
-and config-file errors. Once the receiver is in hand, internal task
+`aprs_rtp::Error` covering address resolution, multicast join, and RTP parse
+errors. Once the receiver is in hand, internal task
 errors are surfaced through tracing rather than the channel — packet
 delivery continues across transient socket/decoder hiccups.
 

@@ -21,7 +21,7 @@ use tokio::sync::mpsc;
 /// `afsk::AfskDemodulator::audio_level` are doubled to compensate.
 ///
 /// - `rec`   = `(raw_peak − raw_valley) × 100` — overall received level;
-///             ~100 for a full-scale 16-bit signal.
+///             ~200 for a full-scale 16-bit signal (peak-to-peak swing of 2.0 × 100).
 /// - `mark`  = `mark_iq_peak × 200`             — 1200 Hz tone envelope.
 /// - `space` = `space_iq_peak × 200`            — 2200 Hz tone envelope.
 ///
