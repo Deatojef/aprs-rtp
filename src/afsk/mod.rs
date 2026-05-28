@@ -205,19 +205,23 @@ impl AfskDemodulator {
         self.slicers.dplls.len()
     }
 
-    /// Audio levels at the current moment, normalized to direwolf's scale.
+    /// Audio levels at the current moment, on direwolf's familiar 0–~200 scale.
     ///
-    /// - `rec`   = `(raw_peak − raw_valley) × 50`  (0–100, 100 = full-scale audio)
-    /// - `mark`  = `mark_iq_peak × 100`             (same scale; ~50 for full-scale tone)
-    /// - `space` = `space_iq_peak × 100`
+    /// Direwolf normalizes s16 input to ±2.0; we normalize to ±1.0 (standard).
+    /// To report values on the same numeric scale direwolf users expect, the
+    /// constants here are doubled relative to direwolf's `* 50` / `* 100`.
+    ///
+    /// - `rec`   = `(raw_peak − raw_valley) × 100`  (~100 = full-scale audio)
+    /// - `mark`  = `mark_iq_peak × 200`             (~100 for full-scale tone)
+    /// - `space` = `space_iq_peak × 200`
     ///
     /// All three use the slow-tracking (5× longer time constant) IIR so values are
     /// stable across consecutive packets and comparable across different SSRC streams.
     pub fn audio_level(&self) -> AudioLevel {
-        let rec = ((self.alevel_rec_peak - self.alevel_rec_valley) * 50.0)
+        let rec = ((self.alevel_rec_peak - self.alevel_rec_valley) * 100.0)
             .clamp(0.0, 255.0) as u8;
-        let mark = (self.alevel_mark_peak * 100.0).clamp(0.0, 255.0) as u8;
-        let space = (self.alevel_space_peak * 100.0).clamp(0.0, 255.0) as u8;
+        let mark = (self.alevel_mark_peak * 200.0).clamp(0.0, 255.0) as u8;
+        let space = (self.alevel_space_peak * 200.0).clamp(0.0, 255.0) as u8;
         AudioLevel { rec, mark, space }
     }
 }
@@ -303,10 +307,9 @@ mod tests {
     #[test]
     fn audio_level_mark_tone() {
         // Feed a pure 1200 Hz sine at amplitude 0.5 for 2 seconds.
-        // Theoretical rec = (0.5 - (-0.5)) * 50 = 50.
-        // Theoretical mark = (0.5 * pre_filter_gain_at_1200 * 0.5_IQ) * 100.
-        // For unity pre-filter gain at 1200 Hz: mark ≈ 25.
-        // This test prints the actual values so we can assess the scale.
+        // Theoretical rec = (0.5 - (-0.5)) * 100 = 100.
+        // Theoretical mark = (0.5 * pre_filter_gain_at_1200 * 0.5_IQ) * 200.
+        // For unity pre-filter gain at 1200 Hz: mark ≈ 50.
         let cfg = default_cfg();
         let mut demod = AfskDemodulator::new(&cfg, 24000);
         let sample_rate = 24000usize;
@@ -320,10 +323,10 @@ mod tests {
 
         let al = demod.audio_level();
         eprintln!("audio_level_mark_tone: rec={} mark={} space={}", al.rec, al.mark, al.space);
-        // rec should be ~50 (amplitude 0.5, full swing 1.0, * 50 = 50)
-        assert!(al.rec >= 40 && al.rec <= 60, "rec={} expected ~50", al.rec);
-        // mark should be at least 10 (> 20% of theoretical ~25)
-        assert!(al.mark >= 10, "mark={} unexpectedly low for 1200 Hz tone at amp=0.5", al.mark);
+        // rec should be ~100 (amplitude 0.5, full swing 1.0, * 100 = 100)
+        assert!(al.rec >= 80 && al.rec <= 120, "rec={} expected ~100", al.rec);
+        // mark should be at least 20 (> 20% of theoretical ~50)
+        assert!(al.mark >= 20, "mark={} unexpectedly low for 1200 Hz tone at amp=0.5", al.mark);
     }
 
     #[test]

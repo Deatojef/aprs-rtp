@@ -23,7 +23,6 @@ const DEDUP_WINDOW: Duration = Duration::from_secs(3);
 /// One `StreamDecoder` per active SSRC.
 pub struct StreamDecoder {
     ssrc: u32,
-    freq_mhz: Option<f64>,
     demod: AfskDemodulator,
     hdlc: Vec<HdlcDecoder>,
     fix_bits: FixBits,
@@ -37,14 +36,12 @@ impl StreamDecoder {
         ssrc: u32,
         cfg: &DecoderConfig,
         sample_rate: u32,
-        freq_mhz: Option<f64>,
         out: mpsc::Sender<AprsPacket>,
     ) -> Self {
         let num_slicers = cfg.slicers;
         let hdlc = (0..num_slicers).map(HdlcDecoder::new).collect();
         Self {
             ssrc,
-            freq_mhz,
             demod: AfskDemodulator::new(cfg, sample_rate),
             hdlc,
             fix_bits: cfg.fix_bits,
@@ -113,7 +110,7 @@ impl StreamDecoder {
                 first_slice,
                 slicer_hits,
                 audio_level,
-                freq_mhz: self.freq_mhz,
+                freq_mhz: self.ssrc as f64 / 1000.0,
             };
             if self.out.blocking_send(pkt).is_err() {
                 return false;
@@ -135,14 +132,13 @@ pub fn spawn(
     ssrc: u32,
     cfg: DecoderConfig,
     sample_rate: u32,
-    freq_mhz: Option<f64>,
     out: mpsc::Sender<AprsPacket>,
 ) -> std::sync::mpsc::SyncSender<AudioBlock> {
     // Bounded sync channel: limit backlog to 4 blocks (~160ms at 24kHz/960-sample blocks).
     let (tx, rx) = std::sync::mpsc::sync_channel::<AudioBlock>(4);
 
     tokio::task::spawn_blocking(move || {
-        let mut dec = StreamDecoder::new(ssrc, &cfg, sample_rate, freq_mhz, out);
+        let mut dec = StreamDecoder::new(ssrc, &cfg, sample_rate, out);
         while let Ok(block) = rx.recv() {
             if !dec.process_block(&block) {
                 break;

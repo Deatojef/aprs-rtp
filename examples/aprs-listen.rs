@@ -86,18 +86,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
         let al = pkt.audio_level;
         let hits = format!("{}/{}", pkt.slicer_hits, num_slicers);
-        let freq = match pkt.freq_mhz {
-            Some(f) => format!("{:8.3}", f),
-            None    => "     ---".to_string(),
-        };
         println!(
-            "{:>3}  {:>5}  {:>3}  {:>4}  {:>5}  {}  {}",
+            "{:>3}  {:>5}  {:>3}  {:>4}  {:>5}  {:8.3}  {}",
             pkt.first_slice,
             hits,
             al.rec,
             al.mark,
             al.space,
-            freq,
+            pkt.freq_mhz,
             pkt.text,
         );
     }

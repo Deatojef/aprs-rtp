@@ -18,7 +18,6 @@ pub async fn run(
     decoder: DecoderConfig,
     aprs_tx: mpsc::Sender<AprsPacket>,
 ) -> crate::Result<()> {
-    let freq_mhz = source.freq_mhz;
     let mut audio_rx = listener::spawn(source).await?;
 
     // Map SSRC → sender to the per-SSRC blocking DSP thread.
@@ -30,8 +29,8 @@ pub async fn run(
 
         // Apply SSRC filter if configured (handled in listener; this is belt-and-suspenders).
         let entry = decoders.entry(ssrc).or_insert_with(|| {
-            tracing::info!(ssrc, sample_rate, freq_mhz, "new SSRC — spawning stream decoder");
-            stream_decoder::spawn(ssrc, decoder.clone(), sample_rate, freq_mhz, aprs_tx.clone())
+            tracing::info!(ssrc, sample_rate, "new SSRC — spawning stream decoder");
+            stream_decoder::spawn(ssrc, decoder.clone(), sample_rate, aprs_tx.clone())
         });
 
         // If the blocking thread died (channel disconnected), remove and respawn.

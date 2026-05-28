@@ -25,10 +25,6 @@ pub struct SourceConfig {
     /// SSRC allowlist. Empty = accept all SSRCs on the group.
     #[serde(default)]
     pub ssrc: Vec<u32>,
-    /// Tuned frequency in MHz for all SSRCs on this source (e.g. 144.390).
-    /// Optional — shown in output when present; omit if unknown.
-    #[serde(default)]
-    pub freq_mhz: Option<f64>,
 }
 
 #[derive(Debug, Clone, Deserialize)]

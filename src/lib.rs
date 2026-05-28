@@ -15,26 +15,29 @@ use tokio::sync::mpsc;
 
 /// Audio level measurements at packet-decode time.
 ///
-/// Mirrors direwolf's `alevel_t` and uses the same normalization:
+/// Reported on direwolf's familiar 0–~100 scale so values are directly
+/// comparable to direwolf output, even though our internal audio is normalized
+/// to the standard ±1.0 range (vs direwolf's ±2.0). The reporting constants in
+/// `afsk::AfskDemodulator::audio_level` are doubled to compensate.
 ///
-/// - `rec`   = `(raw_peak − raw_valley) × 50`  — overall received level, 0–100 scale
-///             where 100 = full-scale 16-bit audio.
-/// - `mark`  = `mark_iq_peak × 100`             — 1200 Hz tone envelope, same scale.
-/// - `space` = `space_iq_peak × 100`            — 2200 Hz tone envelope, same scale.
+/// - `rec`   = `(raw_peak − raw_valley) × 100` — overall received level;
+///             ~100 for a full-scale 16-bit signal.
+/// - `mark`  = `mark_iq_peak × 200`             — 1200 Hz tone envelope.
+/// - `space` = `space_iq_peak × 200`            — 2200 Hz tone envelope.
 ///
 /// All three use a separate slower-tracking IIR (5× longer time constants than the
 /// demodulation AGC) so values are stable across consecutive packets and can be
 /// compared across different SSRCs on the same normalized audio scale.
 ///
 /// Typical values for a well-adjusted APRS signal: rec 30–70, mark/space 10–40.
-/// A pure full-scale tone yields mark/space ≈ 50 (IQ demodulation halves amplitude).
+/// A pure full-scale tone yields mark/space ≈ 100 (IQ demodulation halves amplitude).
 #[derive(Debug, Clone, Copy, Default)]
 pub struct AudioLevel {
-    /// Overall received audio level (0–100, where 100 = full-scale S16 audio).
+    /// Overall received audio level (~100 = full-scale S16 audio).
     pub rec: u8,
-    /// Mark-tone (1200 Hz) IQ envelope level (0–100).
+    /// Mark-tone (1200 Hz) IQ envelope level.
     pub mark: u8,
-    /// Space-tone (2200 Hz) IQ envelope level (0–100).
+    /// Space-tone (2200 Hz) IQ envelope level.
     pub space: u8,
 }
 
@@ -59,8 +62,9 @@ pub struct AprsPacket {
     pub slicer_hits: u8,
     /// Audio levels at decode time, normalized for cross-packet and cross-SSRC comparison.
     pub audio_level: AudioLevel,
-    /// Tuned frequency in MHz, if provided in the source configuration.
-    pub freq_mhz: Option<f64>,
+    /// Tuned frequency in MHz, derived from the SSRC (ka9q-radio convention:
+    /// SSRC = frequency in kHz, so `freq_mhz = ssrc / 1000.0`).
+    pub freq_mhz: f64,
 }
 
 /// Listens to one ka9q-radio RTP multicast group and decodes APRS packets.
