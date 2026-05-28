@@ -107,18 +107,43 @@ impl Ax25Frame {
 
     /// The callsign most likely responsible for the RF signal we received.
     ///
-    /// If any H-bits are set, this is the last digipeater that set its H-bit
-    /// (i.e. the last station to actually transmit the packet over the air).
-    /// If no H-bits are set, it's the source callsign.
+    /// Walks the via path backward and returns the last entry with H-bit set
+    /// whose callsign is a real station rather than a routing alias (WIDE,
+    /// TRACE, etc.) or iGate annotation (TCPIP, NOGATE, etc.). If no such
+    /// entry exists, falls back to the source callsign.
+    ///
+    /// The alias filtering matters because the New-N paradigm puts entries
+    /// like `WIDE2*` in the path that any digipeater can claim — they're
+    /// slots, not stations. The actual transmitter is the previous real
+    /// callsign in the path.
     pub fn heard_from(&self) -> &str {
-        // Find the last via entry with H-bit set.
         for (i, &h) in self.via_heard.iter().enumerate().rev() {
-            if h {
+            if h && !is_aprs_alias(&self.via[i]) {
                 return &self.via[i];
             }
         }
         &self.source
     }
+}
+
+/// True if `call` is an APRS routing alias or iGate annotation — i.e. a path
+/// slot rather than a real station callsign.
+///
+/// Compared against the base callsign (any `-SSID` suffix is stripped first).
+/// Covers the New-N WIDEn family, the legacy TRACE/RELAY/ECHO/GATE aliases,
+/// and the iGate annotations TCPIP/TCPXX/NOGATE/RFONLY/IGATECALL.
+fn is_aprs_alias(call: &str) -> bool {
+    let base = match call.find('-') {
+        Some(pos) => &call[..pos],
+        None => call,
+    };
+    matches!(
+        base,
+        "WIDE" | "WIDE1" | "WIDE2" | "WIDE3" | "WIDE4" | "WIDE5" | "WIDE6" | "WIDE7"
+        | "TRACE" | "TRACE1" | "TRACE2" | "TRACE3" | "TRACE4" | "TRACE5" | "TRACE6" | "TRACE7"
+        | "RELAY" | "ECHO" | "GATE"
+        | "NOGATE" | "RFONLY" | "TCPIP" | "TCPXX" | "IGATECALL"
+    )
 }
 
 /// Decode a 7-byte AX.25 address field into a callsign string.
@@ -267,6 +292,92 @@ mod tests {
         let parsed = Ax25Frame::parse(&frame).unwrap();
         assert!(parsed.heard_direct());
         assert_eq!(parsed.heard_from(), "KA9Q-1");
+    }
+
+    #[test]
+    fn heard_from_returns_last_h_bit_set() {
+        // Two repeated digipeaters — heard_from must be the last one, not the first.
+        let frame = build_ui_frame(
+            "APDR15",
+            "KA9Q-1",
+            &[("W0NED", true), ("KD9PDP-3", true)],
+            b"info",
+        );
+        let parsed = Ax25Frame::parse(&frame).unwrap();
+        assert!(!parsed.heard_direct());
+        assert_eq!(parsed.heard_from(), "KD9PDP-3");
+    }
+
+    #[test]
+    fn heard_from_first_repeated_not_last() {
+        // Only the first via has H=1 (unusual but legal: e.g., a fill-in digi
+        // marked itself before forwarding to a wide that hasn't yet acted).
+        let frame = build_ui_frame(
+            "APDR15",
+            "KA9Q-1",
+            &[("W0NED", true), ("WIDE2-1", false)],
+            b"info",
+        );
+        let parsed = Ax25Frame::parse(&frame).unwrap();
+        assert!(!parsed.heard_direct());
+        assert_eq!(parsed.heard_from(), "W0NED");
+    }
+
+    #[test]
+    fn heard_from_skips_trailing_wide_alias() {
+        // The real-world case from the user's example:
+        //   N7UW-1>APMI06,NCFPD*,SIMLA*,WIDE2*:...
+        // The trailing WIDE2* is a routing slot, not a station — the last
+        // real digipeater is SIMLA.
+        let frame = build_ui_frame(
+            "APMI06",
+            "N7UW-1",
+            &[("NCFPD", true), ("SIMLA", true), ("WIDE2", true)],
+            b"info",
+        );
+        let parsed = Ax25Frame::parse(&frame).unwrap();
+        assert_eq!(parsed.heard_from(), "SIMLA");
+    }
+
+    #[test]
+    fn heard_from_skips_wide_with_ssid() {
+        // WIDE2-1 (with SSID) is still an alias and must be skipped.
+        let frame = build_ui_frame(
+            "APMI06",
+            "N7UW-1",
+            &[("KD9PDP-3", true), ("WIDE2-1", true)],
+            b"info",
+        );
+        let parsed = Ax25Frame::parse(&frame).unwrap();
+        assert_eq!(parsed.heard_from(), "KD9PDP-3");
+    }
+
+    #[test]
+    fn heard_from_skips_tcpip_annotation() {
+        // iGate annotations (TCPIP*, NOGATE, RFONLY) also count as aliases.
+        let frame = build_ui_frame(
+            "APMI06",
+            "N7UW-1",
+            &[("W0SCA-10", true), ("TCPIP", true)],
+            b"info",
+        );
+        let parsed = Ax25Frame::parse(&frame).unwrap();
+        assert_eq!(parsed.heard_from(), "W0SCA-10");
+    }
+
+    #[test]
+    fn heard_from_falls_back_to_source_when_only_aliases_repeated() {
+        // If every H-bit-set entry is an alias, fall back to source — we
+        // can't determine which station actually transmitted.
+        let frame = build_ui_frame(
+            "APMI06",
+            "N7UW-1",
+            &[("WIDE1-1", true), ("WIDE2-1", true)],
+            b"info",
+        );
+        let parsed = Ax25Frame::parse(&frame).unwrap();
+        assert!(!parsed.heard_direct()); // direct stays false — H-bits ARE set
+        assert_eq!(parsed.heard_from(), "N7UW-1");
     }
 
     #[test]

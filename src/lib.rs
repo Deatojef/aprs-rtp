@@ -65,6 +65,32 @@ pub struct AprsPacket {
     /// Tuned frequency in MHz, derived from the SSRC (ka9q-radio convention:
     /// SSRC = frequency in kHz, so `freq_mhz = ssrc / 1000.0`).
     pub freq_mhz: f64,
+    /// Source callsign-SSID (e.g. "WA0DE-9").
+    pub source: String,
+    /// Destination callsign-SSID (the AX.25 "to" address; APRS encodes
+    /// equipment/software type here, e.g. "APDR15", "APAT51").
+    pub destination: String,
+    /// Digipeater path callsigns in order (excluding source and destination).
+    pub via: Vec<String>,
+    /// Parallel to `via`: true if that digipeater's H-bit ("has been
+    /// repeated") is set in the received frame. This is what the TNC2 `*`
+    /// marker after a callsign represents.
+    pub via_heard: Vec<bool>,
+    /// True if no digipeater H-bits are set — i.e. the source transmitter
+    /// reached our receiver directly, not via any repeater hop.
+    pub heard_direct: bool,
+    /// The station whose signal physically reached our receiver: the last
+    /// digipeater with its H-bit set, or the source callsign when
+    /// `heard_direct` is true.
+    pub heard_from: String,
+    /// APRS Data Type Identifier — the first byte of the info field. `None`
+    /// only for the unusual empty-info UI frame. Common values: `!` `=`
+    /// position, `:` message, `;` object, `>` status, `T` telemetry, `}`
+    /// third-party, `` ` `` / `'` Mic-E.
+    pub dti: Option<u8>,
+    /// Raw info-field bytes (everything after the AX.25 control + PID). May
+    /// contain non-ASCII bytes for Mic-E and binary telemetry payloads.
+    pub info: Vec<u8>,
 }
 
 /// Listens to one ka9q-radio RTP multicast group and decodes APRS packets.

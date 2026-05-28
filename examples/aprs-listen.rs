@@ -12,7 +12,8 @@
 ///   REC    — overall received audio level 0–100  (100 = full-scale S16 audio)
 ///   MARK   — 1200 Hz tone IQ envelope level 0–100
 ///   SPACE  — 2200 Hz tone IQ envelope level 0–100
-///   FREQ   — tuned frequency in MHz from config (--- if not configured)
+///   FREQ   — tuned frequency in MHz, derived from SSRC (ka9q-radio convention)
+///   D      — `D` if heard directly from the source, `*` if a digipeater touched it
 ///   PACKET — TNC2-format decoded text; * after a via callsign = H-bit set (that
 ///            digipeater retransmitted the packet; last * = station we heard over RF)
 ///
@@ -28,9 +29,9 @@ use aprs_rtp::{
 use tokio::sync::mpsc;
 
 // Column header and separator — must stay in sync with the println! format below.
-// Fields: SL(3) · HITS(5) · REC(3) · MARK(4) · SPACE(5) · FREQ(8) · PACKET
-const HEADER: &str = " SL   HITS  REC  MARK  SPACE  FREQ/MHz  PACKET";
-const SEP:    &str = "---  -----  ---  ----  -----  --------  ------";
+// Fields: SL(3) · HITS(5) · REC(3) · MARK(4) · SPACE(5) · FREQ(8) · D(1) · PACKET
+const HEADER: &str = " SL   HITS  REC  MARK  SPACE  FREQ/MHz  D  FROM       PACKET";
+const SEP:    &str = "---  -----  ---  ----  -----  --------  -  ---------  ------";
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -86,14 +87,17 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
         let al = pkt.audio_level;
         let hits = format!("{}/{}", pkt.slicer_hits, num_slicers);
+        let direct = if pkt.heard_direct { 'D' } else { '*' };
         println!(
-            "{:>3}  {:>5}  {:>3}  {:>4}  {:>5}  {:8.3}  {}",
+            "{:>3}  {:>5}  {:>3}  {:>4}  {:>5}  {:8.3}  {:>3} {:>9}  {}",
             pkt.first_slice,
             hits,
             al.rec,
             al.mark,
             al.space,
             pkt.freq_mhz,
+            direct,
+            pkt.heard_from,
             pkt.text,
         );
     }

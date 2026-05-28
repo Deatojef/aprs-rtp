@@ -65,8 +65,8 @@ impl StreamDecoder {
         self.dedup_cache.retain(|_, seen_at| now.duration_since(*seen_at) < DEDUP_WINDOW);
 
         // Collect all valid frames decoded this block.
-        // Key: raw_ax25 bytes.  Value: (tnc2_text, first_slice, slicer_hit_count).
-        let mut decoded: HashMap<Vec<u8>, (String, usize, u8)> = HashMap::new();
+        // Key: raw_ax25 bytes.  Value: (tnc2_text, parsed_frame, first_slice, slicer_hit_count).
+        let mut decoded: HashMap<Vec<u8>, (String, Ax25Frame, usize, u8)> = HashMap::new();
 
         for &sample in &block.samples {
             let bits = self.demod.process_sample(sample);
@@ -81,11 +81,11 @@ impl StreamDecoder {
                             let text = to_tnc2(&ax25);
                             let e = decoded
                                 .entry(valid.data)
-                                .or_insert((text, slicer_idx, 0u8));
-                            if slicer_idx < e.1 {
-                                e.1 = slicer_idx; // track lowest slicer index
+                                .or_insert((text, ax25, slicer_idx, 0u8));
+                            if slicer_idx < e.2 {
+                                e.2 = slicer_idx; // track lowest slicer index
                             }
-                            e.2 = e.2.saturating_add(1);
+                            e.3 = e.3.saturating_add(1);
                         }
                     }
                 }
@@ -95,13 +95,16 @@ impl StreamDecoder {
         // Snapshot audio levels at end of block.
         let audio_level = self.demod.audio_level();
 
-        for (raw_ax25, (text, first_slice, slicer_hits)) in decoded {
+        for (raw_ax25, (text, ax25, first_slice, slicer_hits)) in decoded {
             // Cross-block dedup: suppress if we emitted the same frame recently.
             if self.dedup_cache.contains_key(&raw_ax25) {
                 continue;
             }
             self.dedup_cache.insert(raw_ax25.clone(), now);
 
+            let dti = ax25.info.first().copied();
+            let heard_direct = ax25.heard_direct();
+            let heard_from = ax25.heard_from().to_string();
             let pkt = AprsPacket {
                 ssrc: self.ssrc,
                 text,
@@ -111,6 +114,14 @@ impl StreamDecoder {
                 slicer_hits,
                 audio_level,
                 freq_mhz: self.ssrc as f64 / 1000.0,
+                source: ax25.source,
+                destination: ax25.destination,
+                via: ax25.via,
+                via_heard: ax25.via_heard,
+                heard_direct,
+                heard_from,
+                dti,
+                info: ax25.info,
             };
             if self.out.blocking_send(pkt).is_err() {
                 return false;
