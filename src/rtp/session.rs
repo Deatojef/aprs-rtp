@@ -1,5 +1,8 @@
+use crate::rtp::{
+    encoding::{self, PtInfo},
+    packet::RtpHeader,
+};
 use std::collections::BTreeMap;
-use crate::rtp::{encoding::{self, PtInfo}, packet::RtpHeader};
 
 /// Maximum silence samples to inject for a gap before treating it as a stream restart.
 /// At 24kHz this is 80ms — enough to cover jitter but short enough to avoid
@@ -63,12 +66,7 @@ impl Session {
         let mut out = Vec::new();
 
         // Flush packets that are ready: oldest held packet when buffer exceeds the window.
-        loop {
-            let oldest_seq = match self.reorder.keys().next().copied() {
-                Some(s) => s,
-                None => break,
-            };
-
+        while let Some(oldest_seq) = self.reorder.keys().next().copied() {
             if self.reorder.len() <= self.jitter_buffer {
                 break;
             }
@@ -100,7 +98,12 @@ impl Session {
 
             self.next_seq = self.next_seq.wrapping_add(1);
 
-            tracing::trace!(ssrc = self.ssrc, seq = oldest_seq, n = samples.len(), "audio block");
+            tracing::trace!(
+                ssrc = self.ssrc,
+                seq = oldest_seq,
+                n = samples.len(),
+                "audio block"
+            );
 
             out.push(AudioBlock {
                 ssrc: self.ssrc,
@@ -125,11 +128,19 @@ mod tests {
     use crate::rtp::encoding::{Encoding, PtInfo};
 
     fn make_pt() -> PtInfo {
-        PtInfo { sample_rate: 24000, channels: 1, encoding: Encoding::S16Be }
+        PtInfo {
+            sample_rate: 24000,
+            channels: 1,
+            encoding: Encoding::S16Be,
+        }
     }
 
     fn make_header(seq: u16, ssrc: u32) -> RtpHeader {
-        RtpHeader { payload_type: 116, seq, ssrc }
+        RtpHeader {
+            payload_type: 116,
+            seq,
+            ssrc,
+        }
     }
 
     fn make_payload(n_samples: usize) -> Vec<u8> {

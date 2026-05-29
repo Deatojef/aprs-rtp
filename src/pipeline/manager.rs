@@ -2,10 +2,10 @@ use std::collections::HashMap;
 use tokio::sync::mpsc;
 
 use crate::{
+    AprsPacket,
     config::{DecoderConfig, SourceConfig},
     pipeline::stream_decoder,
     rtp::{listener, session::AudioBlock},
-    AprsPacket,
 };
 
 /// Receive `AudioBlock`s from the RTP listener and dispatch each to a per-SSRC

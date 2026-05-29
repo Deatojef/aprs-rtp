@@ -46,7 +46,10 @@ impl Oscillator {
     /// Create an oscillator for `freq` Hz at the given `sample_rate`.
     pub fn new(freq: f32, sample_rate: u32) -> Self {
         let delta = (f64::powi(2.0, 32) * freq as f64 / sample_rate as f64).round() as u64;
-        Self { phase: 0, delta: delta as u32 }
+        Self {
+            phase: 0,
+            delta: delta as u32,
+        }
     }
 
     /// Advance the phase by one sample and return the new phase.
@@ -67,7 +70,6 @@ impl Oscillator {
     pub fn sin(&self) -> f32 {
         fsin256(self.phase)
     }
-
 }
 
 #[cfg(test)]
@@ -112,7 +114,10 @@ mod tests {
         // 20 * 214748365 = 4294967300 → wraps to 4 (off by ~4 LSB out of 2^32)
         // The phase error is < 4 / 2^32 ≈ 1 ppm — well within tolerance.
         let phase_frac = osc.phase as f64 / f64::powi(2.0, 32);
-        assert!(phase_frac < 1e-6, "phase residual after 1 cycle = {phase_frac:.2e}");
+        assert!(
+            phase_frac < 1e-6,
+            "phase residual after 1 cycle = {phase_frac:.2e}"
+        );
     }
 
     #[test]

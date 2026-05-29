@@ -23,8 +23,8 @@
 /// Informational events (new SSRCs, errors) go to stderr.
 /// Set RUST_LOG=debug to see per-audio-block tracing from the library.
 use aprs_rtp::{
-    config::{DecoderConfig, SourceConfig},
     AprsListener, AprsPacket,
+    config::{DecoderConfig, SourceConfig},
 };
 use serde::Deserialize;
 use tokio::sync::mpsc;
@@ -40,7 +40,9 @@ struct AppConfig {
 
 // Column header and separator — must stay in sync with the println! format below.
 // Fields: SL(3) · HITS(5) · REC(3) · MARK(4) · SPACE(5) · FREQ(8) · D(1) · FROM · PACKET
+#[rustfmt::skip]
 const HEADER: &str = " SL   HITS  REC  MARK  SPACE  FREQ/MHz  D  FROM       PACKET";
+#[rustfmt::skip]
 const SEP:    &str = "---  -----  ---  ----  -----  --------  -  ---------  ------";
 
 #[tokio::main]
@@ -54,11 +56,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .with_writer(std::io::stderr)
         .init();
 
-    let config_path = std::env::args().nth(1).unwrap_or_else(|| "examples/config.toml".into());
+    let config_path = std::env::args()
+        .nth(1)
+        .unwrap_or_else(|| "examples/config.toml".into());
     let text = std::fs::read_to_string(&config_path)
         .map_err(|e| format!("cannot read {config_path}: {e}"))?;
-    let cfg: AppConfig = toml::from_str(&text)
-        .map_err(|e| format!("parse error in {config_path}: {e}"))?;
+    let cfg: AppConfig =
+        toml::from_str(&text).map_err(|e| format!("parse error in {config_path}: {e}"))?;
 
     if cfg.sources.is_empty() {
         eprintln!("error: no [[source]] entries in {config_path}");

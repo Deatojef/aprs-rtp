@@ -6,6 +6,7 @@
 ///
 /// Unlike direwolf's `memmove`-based approach, this uses a true ring buffer
 /// so each push is O(1) with no data movement.
+#[rustfmt::skip]
 pub struct DelayLine {
     buf: Vec<f32>,
     head: usize, // index of the most recently written sample
@@ -16,7 +17,11 @@ impl DelayLine {
     /// Create a new delay line of `taps` samples, initialized to zero.
     pub fn new(taps: usize) -> Self {
         assert!(taps > 0);
-        Self { buf: vec![0.0f32; taps], head: 0, len: taps }
+        Self {
+            buf: vec![0.0f32; taps],
+            head: 0,
+            len: taps,
+        }
     }
 
     /// Push one new sample, displacing the oldest.
@@ -34,7 +39,11 @@ impl DelayLine {
     /// the oldest — identical to direwolf's `filter[j] * data[j]` ordering.
     #[inline(always)]
     pub fn convolve(&self, kernel: &[f32]) -> f32 {
-        assert_eq!(kernel.len(), self.len, "kernel length must match delay line");
+        assert_eq!(
+            kernel.len(),
+            self.len,
+            "kernel length must match delay line"
+        );
         let mut sum = 0.0f32;
         let split = self.len - self.head;
         // The ring is laid out as: [head..len] is the newest portion, [0..head] the oldest.
@@ -47,7 +56,6 @@ impl DelayLine {
         }
         sum
     }
-
 }
 
 #[cfg(test)]

@@ -3,12 +3,12 @@ pub mod dpll;
 pub mod oscillator;
 pub mod slicer;
 
+use crate::AudioLevel;
 use crate::config::DecoderConfig;
 use crate::dsp::{
     filter::{calc_taps, gen_bandpass, gen_rrc_lowpass},
     fir::DelayLine,
 };
-use crate::AudioLevel;
 use agc::AgcState;
 use dpll::DemodBit;
 use oscillator::Oscillator;
@@ -29,8 +29,8 @@ const AGC_SLOW_DECAY: f32 = 0.000090;
 // Audio-level reporting time constants: 5× slower than the demodulation AGC.
 // Matches direwolf's `quick_attack = agc_fast_attack * 0.2` pattern so that
 // reported levels are stable across packets and comparable across SSRCs.
-const ALEVEL_FAST_ATTACK: f32 = AGC_FAST_ATTACK * 0.2;   // 0.14
-const ALEVEL_SLOW_DECAY: f32 = AGC_SLOW_DECAY * 0.2;     // 0.000018
+const ALEVEL_FAST_ATTACK: f32 = AGC_FAST_ATTACK * 0.2; // 0.14
+const ALEVEL_SLOW_DECAY: f32 = AGC_SLOW_DECAY * 0.2; // 0.000018
 
 // Maximum filter size (matches direwolf's MAX_FILTER_SIZE).
 const MAX_FILTER_SIZE: usize = 480;
@@ -202,8 +202,7 @@ impl AfskDemodulator {
     /// All three use the slow-tracking (5× longer time constant) IIR so values are
     /// stable across consecutive packets and comparable across different SSRC streams.
     pub fn audio_level(&self) -> AudioLevel {
-        let rec = ((self.alevel_rec_peak - self.alevel_rec_valley) * 100.0)
-            .clamp(0.0, 255.0) as u8;
+        let rec = ((self.alevel_rec_peak - self.alevel_rec_valley) * 100.0).clamp(0.0, 255.0) as u8;
         let mark = (self.alevel_mark_peak * 200.0).clamp(0.0, 255.0) as u8;
         let space = (self.alevel_space_peak * 200.0).clamp(0.0, 255.0) as u8;
         AudioLevel { rec, mark, space }
@@ -236,8 +235,14 @@ mod tests {
         let demod = AfskDemodulator::new(&cfg, 24000);
         assert!(demod.pre_filter.len() < MAX_FILTER_SIZE);
         assert!(demod.lp_filter.len() < MAX_FILTER_SIZE);
-        assert!(demod.pre_filter.len() % 2 == 1, "pre-filter should be odd-length");
-        assert!(demod.lp_filter.len() % 2 == 1, "lp-filter should be odd-length");
+        assert!(
+            demod.pre_filter.len() % 2 == 1,
+            "pre-filter should be odd-length"
+        );
+        assert!(
+            demod.lp_filter.len() % 2 == 1,
+            "lp-filter should be odd-length"
+        );
     }
 
     #[test]
@@ -272,7 +277,9 @@ mod tests {
             let bits = demod.process_sample(sample);
             for b in bits {
                 total_bits += 1;
-                if b.bit { mark_bits += 1; }
+                if b.bit {
+                    mark_bits += 1;
+                }
             }
         }
 
@@ -284,7 +291,9 @@ mod tests {
         assert!(
             mark_ratio > 0.85,
             "mark ratio {:.2} too low (total={}, mark={})",
-            mark_ratio, total_bits, mark_bits
+            mark_ratio,
+            total_bits,
+            mark_bits
         );
     }
 
@@ -306,11 +315,22 @@ mod tests {
         }
 
         let al = demod.audio_level();
-        eprintln!("audio_level_mark_tone: rec={} mark={} space={}", al.rec, al.mark, al.space);
+        eprintln!(
+            "audio_level_mark_tone: rec={} mark={} space={}",
+            al.rec, al.mark, al.space
+        );
         // rec should be ~100 (amplitude 0.5, full swing 1.0, * 100 = 100)
-        assert!(al.rec >= 80 && al.rec <= 120, "rec={} expected ~100", al.rec);
+        assert!(
+            al.rec >= 80 && al.rec <= 120,
+            "rec={} expected ~100",
+            al.rec
+        );
         // mark should be at least 20 (> 20% of theoretical ~50)
-        assert!(al.mark >= 20, "mark={} unexpectedly low for 1200 Hz tone at amp=0.5", al.mark);
+        assert!(
+            al.mark >= 20,
+            "mark={} unexpectedly low for 1200 Hz tone at amp=0.5",
+            al.mark
+        );
     }
 
     #[test]
@@ -328,7 +348,9 @@ mod tests {
             let bits = demod.process_sample(sample);
             for b in bits {
                 total_bits += 1;
-                if !b.bit { space_bits += 1; }
+                if !b.bit {
+                    space_bits += 1;
+                }
             }
         }
 
@@ -337,7 +359,9 @@ mod tests {
         assert!(
             space_ratio > 0.85,
             "space ratio {:.2} too low (total={}, space={})",
-            space_ratio, total_bits, space_bits
+            space_ratio,
+            total_bits,
+            space_bits
         );
     }
 }

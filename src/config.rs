@@ -60,9 +60,21 @@ pub enum FixBits {
     Double,
 }
 
-fn default_port() -> u16 { 5004 }
-fn default_jitter_buffer() -> usize { 2 }
-fn default_mark_hz() -> u32 { 1200 }
-fn default_space_hz() -> u32 { 2200 }
-fn default_baud() -> u32 { 1200 }
-fn default_slicers() -> usize { 8 }
+fn default_port() -> u16 {
+    5004
+}
+fn default_jitter_buffer() -> usize {
+    2
+}
+fn default_mark_hz() -> u32 {
+    1200
+}
+fn default_space_hz() -> u32 {
+    2200
+}
+fn default_baud() -> u32 {
+    1200
+}
+fn default_slicers() -> usize {
+    8
+}

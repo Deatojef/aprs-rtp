@@ -77,7 +77,9 @@ impl HdlcDecoder {
         // 0x7E = 01111110 → flag byte.
         if self.pat_det == 0x7E {
             let result = if self.in_frame && self.frame_buf.len() >= MIN_FRAME_LEN {
-                Some(RawFrame { data: self.frame_buf.clone() })
+                Some(RawFrame {
+                    data: self.frame_buf.clone(),
+                })
             } else {
                 None
             };
@@ -149,7 +151,10 @@ mod tests {
 
     fn bits_from_bytes(bytes: &[u8]) -> Vec<bool> {
         // Returns bits LSB-first per byte (same order HDLC transmits them).
-        bytes.iter().flat_map(|&b| (0..8).map(move |i| (b >> i) & 1 == 1)).collect()
+        bytes
+            .iter()
+            .flat_map(|&b| (0..8).map(move |i| (b >> i) & 1 == 1))
+            .collect()
     }
 
     fn nrzi_encode(bits: &[bool]) -> Vec<bool> {
@@ -279,5 +284,4 @@ mod tests {
         }
         assert!(!got_frame, "abort sequence should prevent frame emission");
     }
-
 }

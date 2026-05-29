@@ -22,8 +22,7 @@ use tokio::sync::mpsc;
 /// to the standard ±1.0 range (vs direwolf's ±2.0). The reporting constants in
 /// `afsk::AfskDemodulator::audio_level` are doubled to compensate.
 ///
-/// - `rec`   = `(raw_peak − raw_valley) × 100` — overall received level;
-///             ~200 for a full-scale 16-bit signal (peak-to-peak swing of 2.0 × 100).
+/// - `rec`   = `(raw_peak − raw_valley) × 100` — overall received level; ~200 for a full-scale 16-bit signal (peak-to-peak swing of 2.0 × 100).
 /// - `mark`  = `mark_iq_peak × 200`             — 1200 Hz tone envelope.
 /// - `space` = `space_iq_peak × 200`            — 2200 Hz tone envelope.
 ///

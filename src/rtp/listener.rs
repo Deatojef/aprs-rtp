@@ -8,13 +8,13 @@ use tokio::sync::mpsc;
 use tracing::{debug, info, warn};
 
 use crate::{
+    Error, Result,
     config::SourceConfig,
     rtp::{
         encoding::pt_info,
         packet,
         session::{AudioBlock, Session},
     },
-    Error, Result,
 };
 
 /// Resolves `host` to an IPv4 multicast address.
@@ -108,16 +108,24 @@ pub async fn spawn(cfg: SourceConfig) -> Result<mpsc::Receiver<AudioBlock>> {
                     Some(i) => i,
                     None => {
                         // Return a temporary placeholder; we'll skip below.
-                        return Session::new(header.ssrc, crate::rtp::encoding::PtInfo {
-                            sample_rate: 0,
-                            channels: 0,
-                            encoding: crate::rtp::encoding::Encoding::S16Be,
-                        }, jitter_buffer);
+                        return Session::new(
+                            header.ssrc,
+                            crate::rtp::encoding::PtInfo {
+                                sample_rate: 0,
+                                channels: 0,
+                                encoding: crate::rtp::encoding::Encoding::S16Be,
+                            },
+                            jitter_buffer,
+                        );
                     }
                 };
-                info!(ssrc = header.ssrc, pt = header.payload_type,
-                      sample_rate = info.sample_rate, channels = info.channels,
-                      "new RTP session");
+                info!(
+                    ssrc = header.ssrc,
+                    pt = header.payload_type,
+                    sample_rate = info.sample_rate,
+                    channels = info.channels,
+                    "new RTP session"
+                );
                 Session::new(header.ssrc, info, jitter_buffer)
             });
 

@@ -17,7 +17,10 @@ pub struct AgcState {
 
 impl AgcState {
     pub fn new() -> Self {
-        Self { peak: 0.0, valley: 0.0 }
+        Self {
+            peak: 0.0,
+            valley: 0.0,
+        }
     }
 
     /// Update the envelope and return the normalized value.
@@ -119,6 +122,9 @@ mod tests {
             agc.update(0.0, 0.70, 0.00009);
         }
         // With slow_decay = 0.00009, peak should barely have moved.
-        assert!((agc.peak - peak_before).abs() < 0.02, "peak decayed too fast");
+        assert!(
+            (agc.peak - peak_before).abs() < 0.02,
+            "peak decayed too fast"
+        );
     }
 }

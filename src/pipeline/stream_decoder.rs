@@ -3,13 +3,13 @@ use std::time::{Duration, Instant, SystemTime};
 use tokio::sync::mpsc;
 
 use crate::{
+    AprsPacket,
     afsk::AfskDemodulator,
     aprs::text::to_tnc2,
     ax25::frame::Ax25Frame,
     config::{DecoderConfig, FixBits},
     hdlc::{fec::try_validate, framer::HdlcDecoder},
     rtp::session::AudioBlock,
-    AprsPacket,
 };
 
 // Suppress re-emission of a frame with identical raw AX.25 bytes from the same
@@ -62,7 +62,8 @@ impl StreamDecoder {
         let now = Instant::now();
 
         // Evict stale dedup entries once per block (cache stays tiny in practice).
-        self.dedup_cache.retain(|_, seen_at| now.duration_since(*seen_at) < DEDUP_WINDOW);
+        self.dedup_cache
+            .retain(|_, seen_at| now.duration_since(*seen_at) < DEDUP_WINDOW);
 
         // Collect all valid frames decoded this block.
         // Key: raw_ax25 bytes.  Value: (tnc2_text, parsed_frame, first_slice, slicer_hit_count).

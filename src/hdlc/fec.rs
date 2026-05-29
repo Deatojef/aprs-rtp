@@ -43,15 +43,15 @@ pub fn try_validate(raw: &RawFrame, fix_bits: FixBits) -> Option<ValidFrame> {
 
     // Check clean decode first.
     if check_crc(data) {
-        return Some(ValidFrame { data: data[..data.len() - 2].to_vec() });
+        return Some(ValidFrame {
+            data: data[..data.len() - 2].to_vec(),
+        });
     }
 
     match fix_bits {
         FixBits::None => None,
         FixBits::Single => fix_single_bit(data),
-        FixBits::Double => {
-            fix_single_bit(data).or_else(|| fix_double_adjacent(data))
-        }
+        FixBits::Double => fix_single_bit(data).or_else(|| fix_double_adjacent(data)),
     }
 }
 
@@ -71,7 +71,9 @@ fn fix_single_bit(frame: &[u8]) -> Option<ValidFrame> {
         for bit_idx in 0..8u8 {
             buf[byte_idx] ^= 1 << bit_idx;
             if check_crc(&buf) {
-                return Some(ValidFrame { data: buf[..n - 2].to_vec() });
+                return Some(ValidFrame {
+                    data: buf[..n - 2].to_vec(),
+                });
             }
             buf[byte_idx] ^= 1 << bit_idx; // restore
         }
@@ -97,7 +99,9 @@ fn fix_double_adjacent(frame: &[u8]) -> Option<ValidFrame> {
         buf[b0] ^= 1 << bit0;
         buf[b1] ^= 1 << bit1;
         if check_crc(&buf) {
-            return Some(ValidFrame { data: buf[..n - 2].to_vec() });
+            return Some(ValidFrame {
+                data: buf[..n - 2].to_vec(),
+            });
         }
         buf[b0] ^= 1 << bit0;
         buf[b1] ^= 1 << bit1;

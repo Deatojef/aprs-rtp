@@ -44,7 +44,14 @@ pub fn parse(buf: &[u8]) -> crate::Result<(RtpHeader, usize)> {
         return Err(crate::Error::PacketTooShort(buf.len()));
     }
 
-    Ok((RtpHeader { payload_type, seq, ssrc }, offset))
+    Ok((
+        RtpHeader {
+            payload_type,
+            seq,
+            ssrc,
+        },
+        offset,
+    ))
 }
 
 #[cfg(test)]
@@ -56,8 +63,9 @@ mod tests {
         // Version=2, no padding, no extension, CC=0, no marker, PT=116, seq=1, ts=0, ssrc=0xDEAD
         let mut buf = [0u8; 12];
         buf[0] = 0x80; // V=2, P=0, X=0, CC=0
-        buf[1] = 116;  // M=0, PT=116
-        buf[2] = 0x00; buf[3] = 0x01; // seq=1
+        buf[1] = 116; // M=0, PT=116
+        buf[2] = 0x00;
+        buf[3] = 0x01; // seq=1
         buf[4..8].copy_from_slice(&0u32.to_be_bytes()); // timestamp=0
         buf[8..12].copy_from_slice(&0xDEAD_u32.to_be_bytes()); // ssrc
         let (hdr, offset) = parse(&buf).unwrap();

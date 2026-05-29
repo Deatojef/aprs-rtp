@@ -81,12 +81,14 @@ impl Dpll {
         self.prev_d_c_pll = self.data_clock_pll;
 
         // Unsigned add to avoid signed-integer overflow UB (mirrors direwolf's cast).
-        self.data_clock_pll =
-            (self.data_clock_pll as u32).wrapping_add(self.step) as i32;
+        self.data_clock_pll = (self.data_clock_pll as u32).wrapping_add(self.step) as i32;
 
         let bit_sampled = if self.data_clock_pll < 0 && self.prev_d_c_pll > 0 {
             self.dcd_each_symbol();
-            Some(DemodBit { bit: demod_out > 0.0, slice: self.slice })
+            Some(DemodBit {
+                bit: demod_out > 0.0,
+                slice: self.slice,
+            })
         } else {
             None
         };

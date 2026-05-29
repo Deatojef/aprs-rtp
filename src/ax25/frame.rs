@@ -34,7 +34,10 @@ impl Ax25Frame {
         if pos + 7 > data.len() {
             return None;
         }
-        let (dest, dest_end) = decode_address(&data[pos..pos + 7]);
+        // A bad character in any address field means the frame is mis-decoded
+        // (or an FCS false-positive from the bit-fixer / a divergent slicer):
+        // reject the whole frame rather than forward garbage callsigns.
+        let (dest, dest_end) = decode_address(&data[pos..pos + 7])?;
         pos += 7;
         // End-of-address bit should NOT be set on destination in normal frames,
         // but we don't enforce it — source or via entries end the address field.
@@ -44,7 +47,7 @@ impl Ax25Frame {
         if pos + 7 > data.len() {
             return None;
         }
-        let (src, src_end) = decode_address(&data[pos..pos + 7]);
+        let (src, src_end) = decode_address(&data[pos..pos + 7])?;
         pos += 7;
 
         // Optional digipeater addresses: continue while end-of-address bit not set.
@@ -55,7 +58,7 @@ impl Ax25Frame {
                 if pos + 7 > data.len() {
                     return None; // truncated
                 }
-                let (call, end, h_bit) = decode_via(&data[pos..pos + 7]);
+                let (call, end, h_bit) = decode_via(&data[pos..pos + 7])?;
                 pos += 7;
                 via.push(call);
                 via_heard.push(h_bit);
@@ -130,33 +133,66 @@ impl Ax25Frame {
 /// slot rather than a real station callsign.
 ///
 /// Compared against the base callsign (any `-SSID` suffix is stripped first).
-/// Covers the New-N WIDEn family, the legacy TRACE/RELAY/ECHO/GATE aliases,
-/// and the iGate annotations TCPIP/TCPXX/NOGATE/RFONLY/IGATECALL.
+/// Covers the New-N WIDEn / TRACEn families (the literal word optionally
+/// followed by a single digit — no real callsign has that shape), the legacy
+/// RELAY/ECHO/GATE aliases, and the iGate annotations
+/// TCPIP/TCPXX/NOGATE/RFONLY/IGATECALL.
 fn is_aprs_alias(call: &str) -> bool {
     let base = match call.find('-') {
         Some(pos) => &call[..pos],
         None => call,
     };
-    matches!(
-        base,
-        "WIDE" | "WIDE1" | "WIDE2" | "WIDE3" | "WIDE4" | "WIDE5" | "WIDE6" | "WIDE7"
-        | "TRACE" | "TRACE1" | "TRACE2" | "TRACE3" | "TRACE4" | "TRACE5" | "TRACE6" | "TRACE7"
-        | "RELAY" | "ECHO" | "GATE"
-        | "NOGATE" | "RFONLY" | "TCPIP" | "TCPXX" | "IGATECALL"
-    )
+    is_wide_trace_alias(base)
+        || matches!(
+            base,
+            "RELAY" | "ECHO" | "GATE" | "NOGATE" | "RFONLY" | "TCPIP" | "TCPXX" | "IGATECALL"
+        )
+}
+
+/// True if `base` is a WIDEn / TRACEn routing alias: the literal `WIDE` or
+/// `TRACE` on its own, or followed by a single digit (`WIDE1`, `TRACE7`, …).
+/// No valid amateur callsign has this shape, so the digit check is safe.
+fn is_wide_trace_alias(base: &str) -> bool {
+    let suffix = base
+        .strip_prefix("WIDE")
+        .or_else(|| base.strip_prefix("TRACE"));
+    match suffix {
+        Some("") => true,
+        Some(s) => s.len() == 1 && s.as_bytes()[0].is_ascii_digit(),
+        None => false,
+    }
 }
 
 /// Decode a 7-byte AX.25 address field into a callsign string.
 ///
-/// Returns (callsign, end_of_address_bit).
-fn decode_address(bytes: &[u8]) -> (String, bool) {
+/// Returns `Some((callsign, end_of_address_bit))`, or `None` if the field is
+/// not a valid callsign. Valid AX.25 address characters are uppercase `A`–`Z`
+/// and digits `0`–`9`, left-justified and space-padded to six bytes. Anything
+/// else — control characters, lowercase, punctuation, an embedded space
+/// followed by more data, or an empty callsign — indicates a mis-decoded
+/// frame, so we reject it rather than emit odd characters downstream.
+fn decode_address(bytes: &[u8]) -> Option<(String, bool)> {
     debug_assert_eq!(bytes.len(), 7);
     let mut call = String::with_capacity(9);
+    let mut seen_pad = false;
     for &b in &bytes[0..6] {
         let ch = (b >> 1) as char;
-        if ch != ' ' {
-            call.push(ch);
+        if ch == ' ' {
+            // Space marks the end of the callsign; the remaining bytes must all
+            // be space padding. A non-space after a space is a corrupt field.
+            seen_pad = true;
+            continue;
         }
+        if seen_pad {
+            return None; // data after padding → invalid
+        }
+        if !ch.is_ascii_uppercase() && !ch.is_ascii_digit() {
+            return None; // non-alphanumeric callsign character → invalid
+        }
+        call.push(ch);
+    }
+    if call.is_empty() {
+        return None; // empty callsign → invalid
     }
     let ssid_byte = bytes[6];
     let ssid = (ssid_byte >> 1) & 0x0F;
@@ -165,17 +201,18 @@ fn decode_address(bytes: &[u8]) -> (String, bool) {
         call.push_str(&ssid.to_string());
     }
     let end_bit = (ssid_byte & 0x01) != 0;
-    (call, end_bit)
+    Some((call, end_bit))
 }
 
 /// Decode a 7-byte AX.25 via (digipeater) address field.
 ///
-/// Returns (callsign, end_of_address_bit, h_bit).
-fn decode_via(bytes: &[u8]) -> (String, bool, bool) {
+/// Returns `Some((callsign, end_of_address_bit, h_bit))`, or `None` if the
+/// callsign is invalid (see [`decode_address`]).
+fn decode_via(bytes: &[u8]) -> Option<(String, bool, bool)> {
     debug_assert_eq!(bytes.len(), 7);
-    let (call, end) = decode_address(bytes);
+    let (call, end) = decode_address(bytes)?;
     let h_bit = (bytes[6] & 0x80) != 0;
-    (call, end, h_bit)
+    Some((call, end, h_bit))
 }
 
 #[cfg(test)]
@@ -208,9 +245,8 @@ mod tests {
         info: &[u8],
     ) -> Vec<u8> {
         let mut frame = Vec::new();
-        // Destination: end_bit set only if no source/via follow? No — end_bit is on last addr.
-        let is_last_dest = via.is_empty() && true; // source always follows destination
-        let _ = is_last_dest;
+        // Destination never carries the end-of-address bit: the source (and any
+        // via entries) always follow it, so its end_bit is always false.
         frame.extend_from_slice(&encode_address(dest, 0, false, false));
 
         let src_end = via.is_empty();
@@ -229,7 +265,11 @@ mod tests {
             let end = i == via.len() - 1;
             let (base, ssid) = parse_ssid(call);
             let mut via_bytes = encode_address(base, ssid, end, h);
-            if end { via_bytes[6] |= 0x01; } else { via_bytes[6] &= !0x01; }
+            if end {
+                via_bytes[6] |= 0x01;
+            } else {
+                via_bytes[6] &= !0x01;
+            }
             frame.extend_from_slice(&via_bytes);
         }
 
@@ -401,5 +441,91 @@ mod tests {
     fn rejects_too_short() {
         assert!(Ax25Frame::parse(&[]).is_none());
         assert!(Ax25Frame::parse(&[0u8; 10]).is_none());
+    }
+
+    /// Overwrite one byte of an address field (pre-SSID) with a raw character,
+    /// AX.25-shifted, so we can inject mis-decoded callsign bytes.
+    fn corrupt_addr_char(frame: &mut [u8], addr_index: usize, byte_in_addr: usize, ch: u8) {
+        frame[addr_index * 7 + byte_in_addr] = ch << 1;
+    }
+
+    #[test]
+    fn rejects_lowercase_in_callsign() {
+        // Destination is address 0; replace its 2nd char with lowercase 'a'.
+        let mut frame = build_ui_frame("APDR15", "KA9Q-1", &[], b"test");
+        corrupt_addr_char(&mut frame, 0, 1, b'a');
+        assert!(Ax25Frame::parse(&frame).is_none());
+    }
+
+    #[test]
+    fn rejects_control_char_in_callsign() {
+        // A 0x14 address byte decodes (>>1) to 0x0A '\n' — the worst case, since
+        // a newline in a callsign would inject a line into an APRS-IS stream.
+        let mut frame = build_ui_frame("APDR15", "KA9Q-1", &[], b"test");
+        frame[7 + 1] = 0x14; // source address (index 1), 2nd byte, raw 0x14
+        assert!(Ax25Frame::parse(&frame).is_none());
+    }
+
+    #[test]
+    fn rejects_punctuation_in_callsign() {
+        // ':' would break the TNC2 SRC>DST:info delimiter.
+        let mut frame = build_ui_frame("APDR15", "KA9Q-1", &[], b"test");
+        corrupt_addr_char(&mut frame, 1, 2, b':');
+        assert!(Ax25Frame::parse(&frame).is_none());
+    }
+
+    #[test]
+    fn rejects_data_after_embedded_space() {
+        // "AB C  " — a space followed by more data is a corrupt field, not a
+        // callsign that should be silently squeezed to "ABC".
+        let mut frame = build_ui_frame("ABCDEF", "KA9Q-1", &[], b"test");
+        corrupt_addr_char(&mut frame, 0, 2, b' '); // dest becomes "AB DEF"
+        assert!(Ax25Frame::parse(&frame).is_none());
+    }
+
+    #[test]
+    fn rejects_empty_callsign() {
+        // All-space source address with SSID 0 → empty callsign.
+        let mut frame = build_ui_frame("APDR15", "KA9Q-1", &[], b"test");
+        for i in 0..6 {
+            frame[7 + i] = b' ' << 1; // blank out source base callsign
+        }
+        frame[7 + 6] &= !0x1E; // clear SSID bits (keep end-of-address bit)
+        assert!(Ax25Frame::parse(&frame).is_none());
+    }
+
+    #[test]
+    fn rejects_bad_char_in_via() {
+        // Garbage in a digipeater callsign must drop the whole frame too.
+        let mut frame = build_ui_frame("APDR15", "KA9Q-1", &[("WIDE1-1", false)], b"test");
+        // Via is address index 2 (dest=0, src=1, via=2).
+        corrupt_addr_char(&mut frame, 2, 0, 0x01); // decodes to a control char
+        assert!(Ax25Frame::parse(&frame).is_none());
+    }
+
+    #[test]
+    fn accepts_valid_alphanumeric_callsigns() {
+        // Sanity: a clean frame with digits and letters still parses.
+        let frame = build_ui_frame("APN382", "N0CALL-9", &[("W0ABC-2", true)], b"!data");
+        let parsed = Ax25Frame::parse(&frame).expect("valid frame should parse");
+        assert_eq!(parsed.destination, "APN382");
+        assert_eq!(parsed.source, "N0CALL-9");
+        assert_eq!(parsed.via, vec!["W0ABC-2"]);
+    }
+
+    #[test]
+    fn wide_trace_alias_matching() {
+        // The WIDEn/TRACEn families are aliases whether bare, digit-suffixed, or
+        // SSID-suffixed — no real callsign has the `WORD` or `WORD<digit>` shape.
+        for alias in [
+            "WIDE", "WIDE1", "WIDE2-1", "WIDE7", "TRACE", "TRACE3", "RELAY", "TCPIP",
+        ] {
+            assert!(is_aprs_alias(alias), "{alias} should be an alias");
+        }
+        // Real stations (including ones that merely start with the alias letters)
+        // must not be misclassified.
+        for call in ["W0NED", "KD9PDP-3", "WIDEN", "WIDE12", "TRACEY", "N7UW-1"] {
+            assert!(!is_aprs_alias(call), "{call} should NOT be an alias");
+        }
     }
 }

@@ -86,7 +86,7 @@ pub fn gen_rrc_lowpass(size: usize, rolloff: f32, samples_per_symbol: f32) -> Ve
 pub fn calc_taps(width_sym: f32, sample_rate: u32, baud: u32, max_taps: usize) -> usize {
     let raw = (width_sym * sample_rate as f32 / baud as f32) as usize;
     let odd = raw | 1; // force odd
-    odd.min(max_taps - 1 | 1)
+    odd.min((max_taps - 1) | 1)
 }
 
 #[cfg(test)]
