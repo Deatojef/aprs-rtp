@@ -60,7 +60,13 @@ pub struct AprsPacket {
     /// Number of slicers (out of the configured total) that independently decoded
     /// this same frame within the same audio block.  Higher = stronger/cleaner signal.
     /// May undercount if slicers finish the frame across an audio-block boundary.
+    /// Equal to `slicer_mask.count_ones()`.
     pub slicer_hits: u8,
+    /// Bitmask of which slicers decoded this frame: bit `i` is set if slicer index
+    /// `i` independently recovered it in this block.  Lets a consumer measure the
+    /// diversity benefit of the multi-slicer bank — e.g. the best single slicer's
+    /// catch rate vs. the union of all slicers.  `first_slice` is its lowest set
+    /// bit and `slicer_hits` is its population count.
     /// Audio levels at decode time, normalized for cross-packet and cross-SSRC comparison.
     pub audio_level: AudioLevel,
     /// Tuned frequency in MHz, derived from the SSRC (ka9q-radio convention:
@@ -84,6 +90,8 @@ pub struct AprsPacket {
     /// digipeater with its H-bit set, or the source callsign when
     /// `heard_direct` is true.
     pub heard_from: String,
+    /// Bitmask of slicers that decoded this frame; see `slicer_hits`.
+    pub slicer_mask: u16,
     /// APRS Data Type Identifier — the first byte of the info field. `None`
     /// only for the unusual empty-info UI frame. Common values: `!` `=`
     /// position, `:` message, `;` object, `>` status, `T` telemetry, `}`

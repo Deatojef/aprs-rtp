@@ -66,8 +66,9 @@ impl StreamDecoder {
             .retain(|_, seen_at| now.duration_since(*seen_at) < DEDUP_WINDOW);
 
         // Collect all valid frames decoded this block.
-        // Key: raw_ax25 bytes.  Value: (tnc2_text, parsed_frame, first_slice, slicer_hit_count).
-        let mut decoded: HashMap<Vec<u8>, (String, Ax25Frame, usize, u8)> = HashMap::new();
+        // Key: raw_ax25 bytes.  Value: (tnc2_text, parsed_frame, slicer bitmask).
+        // The mask's lowest set bit is `first_slice`; its popcount is `slicer_hits`.
+        let mut decoded: HashMap<Vec<u8>, (String, Ax25Frame, u16)> = HashMap::new();
 
         for &sample in &block.samples {
             let bits = self.demod.process_sample(sample);
@@ -80,13 +81,10 @@ impl StreamDecoder {
                     if let Some(valid) = try_validate(&raw, self.fix_bits) {
                         if let Some(ax25) = Ax25Frame::parse(&valid.data) {
                             let text = to_tnc2(&ax25);
-                            let e = decoded
-                                .entry(valid.data)
-                                .or_insert((text, ax25, slicer_idx, 0u8));
-                            if slicer_idx < e.2 {
-                                e.2 = slicer_idx; // track lowest slicer index
-                            }
-                            e.3 = e.3.saturating_add(1);
+                            let e = decoded.entry(valid.data).or_insert((text, ax25, 0u16));
+                            // Slicer count is capped at 16 (config), so the index
+                            // always fits in the u16 mask.
+                            e.2 |= 1u16 << (slicer_idx as u16);
                         }
                     }
                 }
@@ -96,12 +94,16 @@ impl StreamDecoder {
         // Snapshot audio levels at end of block.
         let audio_level = self.demod.audio_level();
 
-        for (raw_ax25, (text, ax25, first_slice, slicer_hits)) in decoded {
+        for (raw_ax25, (text, ax25, slicer_mask)) in decoded {
             // Cross-block dedup: suppress if we emitted the same frame recently.
             if self.dedup_cache.contains_key(&raw_ax25) {
                 continue;
             }
             self.dedup_cache.insert(raw_ax25.clone(), now);
+
+            // Derive the per-frame slicer stats from the accumulated mask.
+            let first_slice = slicer_mask.trailing_zeros() as usize;
+            let slicer_hits = slicer_mask.count_ones() as u8;
 
             let dti = ax25.info.first().copied();
             let heard_direct = ax25.heard_direct();
@@ -121,6 +123,7 @@ impl StreamDecoder {
                 via_heard: ax25.via_heard,
                 heard_direct,
                 heard_from,
+                slicer_mask,
                 dti,
                 info: ax25.info,
             };
